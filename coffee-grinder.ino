@@ -9,7 +9,7 @@
 #include <LowPower.h>
 
 #define versionMajor       1
-#define versionMinor       01
+#define versionMinor       02
 
 #define CONFIG_VERSION "TIM02"
 #define CONFIG_START 32
@@ -52,7 +52,7 @@ configuration_type CONFIGURATION = {
 
 #define buttonPin          2  // input button, switch to ground, multifunction
 
-// LED indicates current mode; flash for flash, on for headlight, off for no lights
+// LED indicates current activity
 
 #define ledPin            10  // indicator led
 #define ledTimer          200  // ms between led blinks
@@ -60,7 +60,6 @@ configuration_type CONFIGURATION = {
 
 // Internal Variables do not alter
 
-int sensorValue = 0;   // variable to store the value coming from the sensor
 unsigned long pressedTime = 0;   // debouncing for button
 unsigned long calibrationStartTime = 0;
 boolean calibrating = false;
@@ -210,10 +209,8 @@ void OneShot() {
 
 int ReadDial() {
   pinMode(detectPin, INPUT_PULLUP);
-  delay(50);
   int dialPosition = analogRead(sensorPin);
   if(debug) Serial.println("Read dial as " + String(dialPosition));
-  delay(50);
   pinMode(detectPin, INPUT);
   int cups = ceil(dialPosition / cupValue) + 1;
   if(debug) Serial.println("Calculated cups as " + String(cups));
