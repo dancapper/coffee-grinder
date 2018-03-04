@@ -6,9 +6,10 @@
 
 #include <EEPROM.h>
 #include <TimerOne.h>
+#include <LowPower.h>
 
 #define versionMajor       1
-#define versionMinor       00
+#define versionMinor       01
 
 #define CONFIG_VERSION "TIM02"
 #define CONFIG_START 32
@@ -31,7 +32,9 @@ configuration_type CONFIGURATION = {
 
 // I used an Arduino Pro Mini clone, so you may prefer different pinouts
 
-#define debug           true  // Debug over serial, recommend false unless debugging for better performance
+#define debug           false  // Debug over serial, recommend false unless debugging for better performance
+
+#define LOW_POWER_MODE  true  // Low power mode - go to sleep when waiting for button press
 
 #define sensorPin         A0  // select the input pin for the variable resistor, 20k, top to detectPin, bottom gnd
 #define detectPin         12  // Pull this pin up to check position of variable resistor
@@ -45,16 +48,15 @@ configuration_type CONFIGURATION = {
 // Button functions:
 // <1s = Run
 // >1s = Calibrate
+// >3s = Save timer to EEPROM
 
 #define buttonPin          2  // input button, switch to ground, multifunction
 
 // LED indicates current mode; flash for flash, on for headlight, off for no lights
 
-#define ledPin             10  // indicator led
+#define ledPin            10  // indicator led
 #define ledTimer          200  // ms between led blinks
 #define fastLedTimer      50   // ms between fast blinks
-
-// Default Values todo: make configurable on the fly
 
 // Internal Variables do not alter
 
@@ -94,6 +96,9 @@ void setup() {
   TIMSK0 |= _BV(OCIE0A);
   
   if(debug) Serial.println("Ready");
+  
+  GoToSleep();
+
 }
 
 void loop() {
@@ -107,16 +112,31 @@ ISR(TIMER0_COMPA_vect){
     Motor(LOW);
     LED(0);
     timeToRun = -1;
+    GoToSleep();
   }
   
   if(timeToBlink > 0) timeToBlink--;
   else if(timeToBlink == 0) {
     LED(0);
     timeToBlink = -1;
+    GoToSleep();
   }
   
   if(blinkLed == 1 && millis() % ledTimer == 0) ToggleLED();
   if(blinkLed == 2 && millis() % fastLedTimer == 0) ToggleLED();
+}
+
+void GoToSleep() {
+  // Low power enhancement
+      
+  if(LOW_POWER_MODE) {
+    if(debug) {
+      Serial.println("Shh... don't fight it (entering sleep mode)");
+      Serial.flush();
+    }
+    
+    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
+  }
 }
 
 void ToggleLED() {
@@ -126,7 +146,7 @@ void ToggleLED() {
 
 void ButtonPress() {
   if(debug) 
-    Serial.println("button pressed" + String(millis()));
+    Serial.println("Button pressed at " + String(millis()));
   if(digitalRead(buttonPin) == LOW) {
     pressedTime = millis();
     attachInterrupt(digitalPinToInterrupt(buttonPin), ButtonRelease, RISING);
@@ -135,7 +155,7 @@ void ButtonPress() {
 
 void ButtonRelease() {
   if(debug)
-    Serial.println("button released" + String(millis()));
+    Serial.println("Button released at " + String(millis()));
   if(digitalRead(buttonPin) == HIGH) {
     int duration = millis() - pressedTime;
     if(calibrating && duration > 30) {
@@ -168,8 +188,9 @@ void EndCalibration() {
  Motor(LOW);
  calibrating = false;
  unsigned long runtime = pressedTime - calibrationStartTime;
- if(debug) Serial.println("Calibration end time is " + String(pressedTime) + "calculated time is" + String(runtime));
+ if(debug) Serial.println("Calibration end time is " + String(pressedTime) + " - calculated time is " + String(runtime));
  CONFIGURATION.duration = runtime;
+ GoToSleep();
 }
 
 void OneShot() {
